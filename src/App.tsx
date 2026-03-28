@@ -5,6 +5,7 @@ const menuItems = [
   { to: '/', label: 'Users', end: true },
   { to: '/recipes', label: 'Recipes' },
   { to: '/cart', label: 'Cart' },
+  { to: '/comments', label: 'Comments' },
   { to: '/post-demo', label: 'Post Demo' },
   { to: '/quote-demo', label: 'Quote Demo' },
 ]

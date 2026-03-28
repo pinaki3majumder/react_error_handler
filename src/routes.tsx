@@ -1,5 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom'
 import App from './App'
+import CommentDetailPage from './pages/CommentDetailPage'
+import CommentsPage from './pages/CommentsPage'
 import PostDemoPage from './pages/PostDemoPage'
 import QuoteDemoPage from './pages/QuoteDemoPage'
 import ResourcePage from './pages/ResourcePage'
@@ -50,6 +52,14 @@ const router = createBrowserRouter([
             functionName="loadCart"
           />
         ),
+      },
+      {
+        path: 'comments',
+        element: <CommentsPage />,
+      },
+      {
+        path: 'comments/:id',
+        element: <CommentDetailPage />,
       },
       {
         path: 'post-demo',
