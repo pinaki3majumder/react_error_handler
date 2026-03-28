@@ -1,7 +1,7 @@
 import axios from 'axios'
-import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ApiErrorState from '../components/ApiErrorState'
+import useRetryableRequest from '../hooks/useRetryableRequest'
 import {
   type Cart,
   type Recipe,
@@ -28,17 +28,6 @@ type ApiFailure = {
   missingDetails?: string
 }
 
-type ErrorLogPayload = {
-  title: string
-  description: string
-  endpoint: string
-  resourceKey: ResourceKey
-  pageName: string
-  functionName: string
-  retryAttempts: number
-  error: ApiFailure
-}
-
 function isUser(item: ResourceItem): item is User {
   return 'firstName' in item
 }
@@ -57,7 +46,7 @@ function renderCardContent(item: ResourceItem) {
       <>
         <div className="resource-card__meta">
           <span>{item.email}</span>
-          <span>{item.mobile}</span>
+          <span>{item.phone}</span>
         </div>
         <p className="resource-card__body">
           {item.company?.name ?? 'Independent'}{' '}
@@ -124,12 +113,6 @@ function ResourcePage({
   functionName,
 }: ResourcePageProps) {
   const navigate = useNavigate()
-  const lastLoggedErrorKeyRef = useRef<string | null>(null)
-  const [items, setItems] = useState<ResourceItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<ApiFailure | null>(null)
-  const [requestVersion, setRequestVersion] = useState(0)
-  const [retryAttempts, setRetryAttempts] = useState(0)
 
   function getBackendMessage(error: unknown) {
     if (!axios.isAxiosError(error)) {
@@ -162,112 +145,59 @@ function ResourcePage({
     return error.message || 'Unable to load data.'
   }
 
-  function handleAction() {
-    if (retryAttempts >= 2) {
-      navigate('/')
-      return
-    }
-
-    setRetryAttempts((count) => count + 1)
-    setRequestVersion((version) => version + 1)
-  }
-
-  useEffect(() => {
-    const controller = new AbortController()
-
-    async function loadItems() {
-      try {
-        setLoading(true)
-        setError(null)
-
-        const response = await axios.get(endpoint, {
-          signal: controller.signal,
-        })
-        const validation = validateResourceResponse(resourceKey, response.data)
-
-        if (!validation.success) {
-          setItems([])
-          setError({
-            errorCode: 'RESPONSE_SCHEMA_MISMATCH',
-            httpStatus: response.status ? String(response.status) : 'No HTTP response',
-            errorMessage: validation.errorMessage,
-            missingDetails: validation.missingDetails,
-          })
-          return
-        }
-
-        setItems(validation.items)
-        setRetryAttempts(0)
-      } catch (err) {
-        if (axios.isCancel(err)) {
-          return
-        }
-
-        if (axios.isAxiosError(err)) {
-          setItems([])
-          setError({
-            errorCode: String(err.code ?? 'UNKNOWN'),
-            httpStatus: err.response?.status ? String(err.response.status) : 'No HTTP response',
-            errorMessage: getBackendMessage(err),
-          })
-          return
-        }
-
-        setItems([])
-        setError({
-          errorCode: 'RESPONSE_SCHEMA_MISMATCH',
-          httpStatus: 'No HTTP response',
-          errorMessage: err instanceof Error ? err.message : 'Unable to load data.',
-        })
-      } finally {
-        setLoading(false)
+  function toApiFailure(error: unknown): ApiFailure {
+    if (axios.isAxiosError(error)) {
+      return {
+        errorCode: String(error.code ?? 'UNKNOWN'),
+        httpStatus: error.response?.status ? String(error.response.status) : 'No HTTP response',
+        errorMessage: getBackendMessage(error),
       }
     }
 
-    void loadItems()
-
-    return () => controller.abort()
-  }, [endpoint, requestVersion, resourceKey])
-
-  useEffect(() => {
-    if (!error) {
-      lastLoggedErrorKeyRef.current = null
-      return
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'errorCode' in error &&
+      'httpStatus' in error &&
+      'errorMessage' in error
+    ) {
+      return error as ApiFailure
     }
 
-    const errorLogPayload: ErrorLogPayload = {
-      title,
-      description,
-      endpoint,
-      resourceKey,
-      pageName,
-      functionName,
-      retryAttempts,
-      error,
+    return {
+      errorCode: 'RESPONSE_SCHEMA_MISMATCH',
+      httpStatus: 'No HTTP response',
+      errorMessage: error instanceof Error ? error.message : 'Unable to load data.',
     }
+  }
 
-    const errorLogKey = JSON.stringify({
-      title,
-      description,
-      endpoint,
-      resourceKey,
-      pageName,
-      functionName,
-      error,
-    })
+  const {
+    data: items,
+    error,
+    loading,
+    retry: handleRetry,
+    retryAttempts,
+  } = useRetryableRequest<ResourceItem[], ApiFailure>({
+    requestKey: `${endpoint}:${resourceKey}`,
+    mapError: toApiFailure,
+    request: async (signal) => {
+      const response = await axios.get(endpoint, {
+        signal,
+      })
+      const validation = validateResourceResponse(resourceKey, response.data)
 
-    if (lastLoggedErrorKeyRef.current === errorLogKey) {
-      return
-    }
+      if (!validation.success) {
+        throw {
+          errorCode: 'RESPONSE_SCHEMA_MISMATCH',
+          httpStatus: response.status ? String(response.status) : 'No HTTP response',
+          errorMessage: validation.errorMessage,
+          missingDetails: validation.missingDetails,
+        } satisfies ApiFailure
+      }
 
-    lastLoggedErrorKeyRef.current = errorLogKey
-
-    void axios.post('/error-log', JSON.stringify(errorLogPayload), {
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-  }, [description, endpoint, error, functionName, pageName, resourceKey, retryAttempts, title])
+      return validation.items
+    },
+  })
 
   if (error) {
     return (
@@ -279,8 +209,9 @@ function ResourcePage({
         httpStatus={error.httpStatus}
         errorMessage={error.errorMessage}
         missingDetails={error.missingDetails}
-        canRetry={retryAttempts < 2}
-        onAction={handleAction}
+        retryAttempts={retryAttempts}
+        onRetry={handleRetry}
+        onFallbackAction={() => navigate('/')}
       />
     )
   }
@@ -294,11 +225,11 @@ function ResourcePage({
       </header>
 
       {loading ? <p className="resource-page__status">Loading data...</p> : null}
-      {!loading && items.length === 0 ? (
+      {!loading && items && items.length === 0 ? (
         <p className="resource-page__status">{emptyMessage}</p>
       ) : null}
 
-      {!loading && items.length > 0 ? (
+      {!loading && items && items.length > 0 ? (
         <div className="resource-grid">
           {items.map((item) => (
             <article key={item.id} className="resource-card">

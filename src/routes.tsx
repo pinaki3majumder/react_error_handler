@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom'
 import App from './App'
+import PostDemoPage from './pages/PostDemoPage'
 import ResourcePage from './pages/ResourcePage'
 
 const router = createBrowserRouter([
@@ -48,6 +49,10 @@ const router = createBrowserRouter([
             functionName="loadCart"
           />
         ),
+      },
+      {
+        path: 'post-demo',
+        element: <PostDemoPage />,
       },
     ],
   },
