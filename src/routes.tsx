@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router-dom'
 import App from './App'
 import PostDemoPage from './pages/PostDemoPage'
+import QuoteDemoPage from './pages/QuoteDemoPage'
 import ResourcePage from './pages/ResourcePage'
 
 const router = createBrowserRouter([
@@ -53,6 +54,10 @@ const router = createBrowserRouter([
       {
         path: 'post-demo',
         element: <PostDemoPage />,
+      },
+      {
+        path: 'quote-demo',
+        element: <QuoteDemoPage />,
       },
     ],
   },

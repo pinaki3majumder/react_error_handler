@@ -6,6 +6,7 @@ const menuItems = [
   { to: '/recipes', label: 'Recipes' },
   { to: '/cart', label: 'Cart' },
   { to: '/post-demo', label: 'Post Demo' },
+  { to: '/quote-demo', label: 'Quote Demo' },
 ]
 
 function App() {
@@ -16,7 +17,7 @@ function App() {
           <p className="sidebar__eyebrow">DummyJSON Browser</p>
           <h1>Data panels</h1>
           <p className="sidebar__copy">
-            Switch between users, recipes, carts, and a render-crash demo from the left menu.
+            Switch between users, recipes, carts, and crash demos from the left menu.
           </p>
         </div>
 
